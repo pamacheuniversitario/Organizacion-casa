@@ -28,7 +28,10 @@ public class ControladorEnergiaGUI extends JFrame {
     private final Color ACCENT_RED = new Color(255, 69, 0);   
     private final Color ACCENT_CYAN = new Color(0, 212, 255); 
     private final Color TEXT_COLOR = Color.WHITE;
-
+ // Variable global para controlar el tiempo de uso diario según la regla activa
+    // Por defecto inicia en 8 horas.
+    private int horasUsoDiarioGlobal = 8;
+    private String reglaActivaActual = "Ninguna (Manual)";
     // Tarifa promedio en Colombia
     private final double TARIFA_KWH = 850.0;
 
@@ -82,7 +85,136 @@ public class ControladorEnergiaGUI extends JFrame {
         construirVistas();
         cargarDispositivosGuardados(); 
     }
+    
+    
+    private JPanel crearPanelReglas() {
+        JPanel panelReglas = new JPanel(new BorderLayout(20, 20));
+        panelReglas.setBackground(BG_COLOR);
+        panelReglas.setBorder(new EmptyBorder(25, 25, 25, 25));
 
+        JLabel lblTitulo = new JLabel("Reglas de Automatización y Horarios");
+        lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        lblTitulo.setForeground(TEXT_COLOR);
+        panelReglas.add(lblTitulo, BorderLayout.NORTH);
+
+        JPanel panelCentro = new JPanel(new GridLayout(1, 3, 20, 20));
+        panelCentro.setBackground(BG_COLOR);
+
+        // --- TARJETA 1: ALTO CONSUMO ---
+        JPanel cardAlto = crearTarjetaRegla("Alto Consumo", 
+            "Mantiene los dispositivos encendidos desde la madrugada hasta las 12 PM (12 hrs diarias).", 
+            ACCENT_RED);
+        JButton btnAlto = new JButton("Activar Regla");
+        estilizarBotonGlobal(btnAlto, ACCENT_RED);
+        btnAlto.addActionListener(e -> aplicarReglaGlobal("Alto Consumo", 12));
+        cardAlto.add(btnAlto, BorderLayout.SOUTH);
+
+        // --- TARJETA 2: MODO ECO ---
+        JPanel cardEco = crearTarjetaRegla("Modo Eco", 
+            "Optimiza el uso. Apaga todos los dispositivos estrictamente a las 8 PM (8 hrs diarias).", 
+            ACCENT_GREEN);
+        JButton btnEco = new JButton("Activar Regla");
+        estilizarBotonGlobal(btnEco, ACCENT_GREEN);
+        btnEco.addActionListener(e -> aplicarReglaGlobal("Modo Eco", 8));
+        cardEco.add(btnEco, BorderLayout.SOUTH);
+
+        // --- TARJETA 3: PERSONALIZADO ---
+        JPanel cardCustom = crearTarjetaRegla("Horario Personalizado", 
+            "Define tus propias horas de encendido y apagado.", 
+            ACCENT_CYAN);
+        
+        JPanel pnlInputs = new JPanel(new GridLayout(2, 2, 5, 5));
+        pnlInputs.setBackground(PANEL_COLOR);
+        
+        JLabel lblInicio = new JLabel("Hora Encendido:");
+        lblInicio.setForeground(Color.LIGHT_GRAY);
+        JComboBox<Integer> comboInicio = new JComboBox<>();
+        
+        JLabel lblFin = new JLabel("Hora Apagado:");
+        lblFin.setForeground(Color.LIGHT_GRAY);
+        JComboBox<Integer> comboFin = new JComboBox<>();
+
+        // Llenar horas (0 a 23)
+        for (int i = 0; i < 24; i++) {
+            comboInicio.addItem(i);
+            comboFin.addItem(i);
+        }
+        
+        pnlInputs.add(lblInicio);
+        pnlInputs.add(comboInicio);
+        pnlInputs.add(lblFin);
+        pnlInputs.add(comboFin);
+
+        JButton btnCustom = new JButton("Aplicar Horario");
+        estilizarBotonGlobal(btnCustom, ACCENT_CYAN);
+        btnCustom.addActionListener(e -> {
+            int inicio = (int) comboInicio.getSelectedItem();
+            int fin = (int) comboFin.getSelectedItem();
+            int horasCalculadas = fin - inicio;
+            
+            if (horasCalculadas <= 0) {
+                JOptionPane.showMessageDialog(this, "La hora de apagado debe ser mayor a la de encendido.", "Error de Lógica", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            aplicarReglaGlobal("Personalizado (" + inicio + "h a " + fin + "h)", horasCalculadas);
+        });
+
+        JPanel wrapCustom = new JPanel(new BorderLayout(0, 10));
+        wrapCustom.setBackground(PANEL_COLOR);
+        wrapCustom.add(pnlInputs, BorderLayout.CENTER);
+        wrapCustom.add(btnCustom, BorderLayout.SOUTH);
+        cardCustom.add(wrapCustom, BorderLayout.SOUTH);
+
+        panelCentro.add(cardAlto);
+        panelCentro.add(cardEco);
+        panelCentro.add(cardCustom);
+
+        panelReglas.add(panelCentro, BorderLayout.CENTER);
+
+        return panelReglas;
+    }
+
+    // Método auxiliar para mantener la estética limpia al crear tarjetas de reglas
+    private JPanel crearTarjetaRegla(String titulo, String desc, Color colorBorde) {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBackground(PANEL_COLOR);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(colorBorde, 2, true),
+            new EmptyBorder(20, 20, 20, 20)
+        ));
+
+        JLabel lblTit = new JLabel(titulo, SwingConstants.CENTER);
+        lblTit.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        lblTit.setForeground(TEXT_COLOR);
+
+        JTextArea txtDesc = new JTextArea(desc);
+        txtDesc.setWrapStyleWord(true);
+        txtDesc.setLineWrap(true);
+        txtDesc.setOpaque(false);
+        txtDesc.setEditable(false);
+        txtDesc.setFocusable(false);
+        txtDesc.setForeground(Color.LIGHT_GRAY);
+        txtDesc.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+
+        panel.add(lblTit, BorderLayout.NORTH);
+        panel.add(txtDesc, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    // Lógica que actualiza el estado global y notifica al usuario
+    private void aplicarReglaGlobal(String nombreRegla, int horasDia) {
+        this.reglaActivaActual = nombreRegla;
+        this.horasUsoDiarioGlobal = horasDia;
+        
+        UIManager.put("OptionPane.background", BG_COLOR);
+        UIManager.put("Panel.background", BG_COLOR);
+        UIManager.put("OptionPane.messageForeground", TEXT_COLOR);
+        
+        JOptionPane.showMessageDialog(this, 
+            "Regla aplicada: " + nombreRegla + "\nLos cálculos de resumen usarán " + horasDia + " horas diarias.", 
+            "Regla Actualizada", JOptionPane.INFORMATION_MESSAGE);
+    }
     private void inicializarMenuLateral() {
         JPanel panelMenu = new JPanel(new GridLayout(6, 1, 10, 15));
         panelMenu.setBackground(new Color(12, 12, 12));
@@ -99,8 +231,12 @@ public class ControladorEnergiaGUI extends JFrame {
         JButton btnReglas = crearBotonMenu("Reglas y Horarios", new Color(74, 82, 138));
         JButton btnResumen = crearBotonMenu("Resumen Total ($)", new Color(254, 150, 180)); 
 
+        // ACCIONES DE LOS BOTONES
         btnDashboard.addActionListener(e -> cardLayout.show(panelContenedor, "VISTA_DASHBOARD"));
         btnDispositivos.addActionListener(e -> cardLayout.show(panelContenedor, "VISTA_DISPOSITIVOS"));
+        
+        // ¡Aquí está la línea que faltaba para que funcione el botón!
+        btnReglas.addActionListener(e -> cardLayout.show(panelContenedor, "VISTA_REGLAS"));
         
         btnResumen.addActionListener(e -> {
             construirTarjetasResumen();
@@ -118,12 +254,12 @@ public class ControladorEnergiaGUI extends JFrame {
 
         add(panelMenu, BorderLayout.WEST);
     }
-
     private void construirVistas() {
         JPanel vistaDashboard = crearPanelDashboard();
         JPanel vistaDispositivos = crearPanelDispositivos();
         JPanel vistaResumen = crearPanelResumenGlobal();
-        JPanel vistaReglas = crearPanelPlaceholder("Reglas y Horarios - Próximamente");
+        // REEMPLAZAR EL PLACEHOLDER POR ESTA LÍNEA:
+        JPanel vistaReglas = crearPanelReglas(); 
 
         panelContenedor.add(vistaDashboard, "VISTA_DASHBOARD");
         panelContenedor.add(vistaDispositivos, "VISTA_DISPOSITIVOS");
@@ -279,6 +415,7 @@ public class ControladorEnergiaGUI extends JFrame {
 
         return panelResumen;
     }
+    
 
     private void construirTarjetasResumen() {
         panelResumenTarjetas.removeAll();
@@ -286,7 +423,8 @@ public class ControladorEnergiaGUI extends JFrame {
         double totalPlataMes = 0;
 
         for (PanelDispositivo disp : listaPanelesDispositivos) {
-            double kwhDisp = (disp.getWatts() * 8 * 30) / 1000.0;
+            // AQUÍ ESTÁ EL CAMBIO: Usamos horasUsoDiarioGlobal en lugar de 8 estático
+            double kwhDisp = (disp.getWatts() * horasUsoDiarioGlobal * 30) / 1000.0;
             double costoDisp = kwhDisp * TARIFA_KWH;
 
             totalKwhMes += kwhDisp;
@@ -328,12 +466,10 @@ public class ControladorEnergiaGUI extends JFrame {
         tTitulo.setFont(new Font("Segoe UI", Font.BOLD, 22));
         tTitulo.setForeground(Color.YELLOW);
 
-        JLabel tAviso = new JLabel("(Basado en 8h/día a $850/kWh)", SwingConstants.CENTER);
+        JLabel tAviso = new JLabel("(Regla Activa: " + reglaActivaActual + " - " + horasUsoDiarioGlobal + "h/día)", SwingConstants.CENTER);
         tAviso.setForeground(Color.LIGHT_GRAY);
 
         JLabel tKwh = new JLabel(String.format("Total Consumo: %.2f kWh", totalKwhMes), SwingConstants.CENTER);
-        tKwh.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        tKwh.setForeground(TEXT_COLOR);
 
         JLabel tCosto = new JLabel(String.format("FACTURA: $ %,.0f COP", totalPlataMes), SwingConstants.CENTER);
         tCosto.setFont(new Font("Segoe UI", Font.BOLD, 24));
